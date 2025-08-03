@@ -95,7 +95,7 @@
                 }
             },
             "sigma_min": 1e-5,
-            "text_cond_model": "openai/clip-vit-large-patch14"
+            "text_cond_model": "google/gemma-3b"
         }
     }
 }

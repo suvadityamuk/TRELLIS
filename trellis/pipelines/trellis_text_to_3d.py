@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from transformers import CLIPTextModel, AutoTokenizer
+from trellis.models.gemma_adapter import GemmaAdapter
 import open3d as o3d
 from .base import Pipeline
 from . import samplers
@@ -68,9 +69,12 @@ class TrellisTextTo3DPipeline(Pipeline):
         Initialize the text conditioning model.
         """
         # load model
-        model = CLIPTextModel.from_pretrained(name)
-        tokenizer = AutoTokenizer.from_pretrained(name)
-        model.eval()
+        # model = CLIPTextModel.from_pretrained(name)
+        # tokenizer = AutoTokenizer.from_pretrained(name)
+        model = GemmaAdapter(model_name=name)
+
+        tokenizer = AutoTokenizer.from_pretrained(name, use_fast=True)
+        # model.eval()
         model = model.cuda()
         self.text_cond_model = {
             'model': model,
@@ -84,11 +88,12 @@ class TrellisTextTo3DPipeline(Pipeline):
         Encode the text.
         """
         assert isinstance(text, list) and all(isinstance(t, str) for t in text), "text must be a list of strings"
-        encoding = self.text_cond_model['tokenizer'](text, max_length=77, padding='max_length', truncation=True, return_tensors='pt')
-        tokens = encoding['input_ids'].cuda()
-        embeddings = self.text_cond_model['model'](input_ids=tokens).last_hidden_state
+        return self.text_cond_model['model'](text).to(torch.float16)
+        # encoding = self.text_cond_model['tokenizer'](text, max_length=77, padding='max_length', truncation=True, return_tensors='pt')
+        # tokens = encoding['input_ids'].cuda()
+        # embeddings = self.text_cond_model['model'](input_ids=tokens).last_hidden_state
         
-        return embeddings
+        # return embeddings
         
     def get_cond(self, prompt: List[str]) -> dict:
         """

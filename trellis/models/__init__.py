@@ -17,6 +17,8 @@ __attributes = {
     
     'SLatFlowModel': 'structured_latent_flow',
     'ElasticSLatFlowModel': 'structured_latent_flow',
+
+    'GemmaAdapter': 'gemma_adapter',
 }
 
 __submodules = []
@@ -94,3 +96,8 @@ if __name__ == '__main__':
         SLatFlowModel,
         ElasticSLatFlowModel,
     )
+
+    from .gemma_adapter import (
+        GemmaAdapter
+    )
+
