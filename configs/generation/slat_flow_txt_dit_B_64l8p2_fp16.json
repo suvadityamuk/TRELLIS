@@ -95,7 +95,7 @@
                 }
             },
             "sigma_min": 1e-5,
-            "text_cond_model": "google/gemma-3b"
+            "text_cond_model": "google/umt5-base"
         }
     }
 }

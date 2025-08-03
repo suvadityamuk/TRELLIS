@@ -2,8 +2,9 @@ from typing import *
 import torch
 import torch.nn as nn
 import numpy as np
-from transformers import CLIPTextModel, AutoTokenizer
+from transformers import AutoTokenizer
 from trellis.models.gemma_adapter import GemmaAdapter
+from trellis.models.t5_adapter import T5Adapter
 import open3d as o3d
 from .base import Pipeline
 from . import samplers
@@ -71,7 +72,8 @@ class TrellisTextTo3DPipeline(Pipeline):
         # load model
         # model = CLIPTextModel.from_pretrained(name)
         # tokenizer = AutoTokenizer.from_pretrained(name)
-        model = GemmaAdapter(model_name=name)
+        # model = GemmaAdapter(model_name=name)
+        model = T5Adapter(model_name=name)
 
         tokenizer = AutoTokenizer.from_pretrained(name, use_fast=True)
         # model.eval()
