@@ -11,32 +11,17 @@ from subprocess import DEVNULL, call
 import numpy as np
 from utils import sphere_hammersley_sequence
 
-import tempfile, json, subprocess
 
-
-# BLENDER_LINK = 'https://download.blender.org/release/Blender3.0/blender-3.0.1-linux-x64.tar.xz'
+BLENDER_LINK = 'https://download.blender.org/release/Blender3.0/blender-3.0.1-linux-x64.tar.xz'
 BLENDER_INSTALLATION_PATH = '/tmp'
-# BLENDER_PATH = f'{BLENDER_INSTALLATION_PATH}/blender-3.0.1-linux-x64/blender'
-
-# def _install_blender():
-#     if not os.path.exists(BLENDER_PATH):
-#         os.system('sudo apt-get update')
-#         os.system('sudo apt-get install -y libxrender1 libxi6 libxkbcommon-x11-0 libsm6')
-#         os.system(f'wget {BLENDER_LINK} -P {BLENDER_INSTALLATION_PATH}')
-#         os.system(f'tar -xvf {BLENDER_INSTALLATION_PATH}/blender-3.0.1-linux-x64.tar.xz -C {BLENDER_INSTALLATION_PATH}')
-
-BLENDER_VER = "4.2.0"
-BLENDER_TAR = f"blender-{BLENDER_VER}-linux-x64.tar.xz"
-BLENDER_LINK = f"https://download.blender.org/release/Blender4.2/{BLENDER_TAR}"
-BLENDER_PATH = f"/tmp/blender-{BLENDER_VER}-linux-x64/blender"
-
+BLENDER_PATH = f'{BLENDER_INSTALLATION_PATH}/blender-3.0.1-linux-x64/blender'
 
 def _install_blender():
     if not os.path.exists(BLENDER_PATH):
         os.system('sudo apt-get update')
-        os.system('sudo apt-get install -y libxrender1 libxi6 libxkbcommon-x11-0 libsm6 libegl1 libgl1')
-        os.system(f'wget -q {BLENDER_LINK} -P {BLENDER_INSTALLATION_PATH}')
-        os.system(f'tar -xf {BLENDER_INSTALLATION_PATH}/{BLENDER_TAR} -C {BLENDER_INSTALLATION_PATH}')
+        os.system('sudo apt-get install -y libxrender1 libxi6 libxkbcommon-x11-0 libsm6')
+        os.system(f'wget {BLENDER_LINK} -P {BLENDER_INSTALLATION_PATH}')
+        os.system(f'tar -xvf {BLENDER_INSTALLATION_PATH}/blender-3.0.1-linux-x64.tar.xz -C {BLENDER_INSTALLATION_PATH}')
 
 
 def _render(file_path, sha256, output_dir, num_views):
@@ -62,15 +47,12 @@ def _render(file_path, sha256, output_dir, num_views):
         '--resolution', '512',
         '--output_folder', output_folder,
         '--engine', 'CYCLES',
-        # '--engine', 'BLENDER_EEVEE',
         '--save_mesh',
     ]
     if file_path.endswith('.blend'):
         args.insert(1, file_path)
     
-    # call(args, stdout=DEVNULL, stderr=DEVNULL)
-    # call(args)
-    # print(result)
+    call(args, stdout=DEVNULL, stderr=DEVNULL)
     
     if os.path.exists(os.path.join(output_folder, 'transforms.json')):
         return {'sha256': sha256, 'rendered': True}
@@ -91,11 +73,9 @@ if __name__ == '__main__':
     dataset_utils.add_args(parser)
     parser.add_argument('--rank', type=int, default=0)
     parser.add_argument('--world_size', type=int, default=1)
-    parser.add_argument('--max_workers', type=int, default=1)
+    parser.add_argument('--max_workers', type=int, default=8)
     opt = parser.parse_args(sys.argv[2:])
     opt = edict(vars(opt))
-
-    
 
     os.makedirs(os.path.join(opt.output_dir, 'renders'), exist_ok=True)
     
@@ -121,12 +101,6 @@ if __name__ == '__main__':
             instances = opt.instances.split(',')
         metadata = metadata[metadata['sha256'].isin(instances)]
 
-    import math, multiprocessing as mp
-    from pathlib import Path
-
-    N = int(opt.max_workers)          # how many Blender procs to run in parallel
-    chunk = math.ceil(len(metadata) / N)
-
     start = len(metadata) * opt.rank // opt.world_size
     end = len(metadata) * (opt.rank + 1) // opt.world_size
     metadata = metadata[start:end]
@@ -140,54 +114,8 @@ if __name__ == '__main__':
                 
     print(f'Processing {len(metadata)} objects...')
 
-    def launch(worker_idx, sub_df):
-        job_path = Path(tempfile.mktemp(suffix=f"_{worker_idx}.json"))
-        sub_df[["local_path", "sha256"]].to_json(job_path, orient="records")
-
-        env = os.environ.copy()
-        env["CYCLES_CACHE_PATH"] = "/home/suvaditya/.cache/blender/cycles_kernels"
-
-        args = [
-            BLENDER_PATH, "-b",
-            "--log-file", str(Path(opt.output_dir) / f"blender_{worker_idx}.log"),
-            "-P", os.path.join(os.path.dirname(__file__),
-                            "blender_script", "batch_driver.py"),
-            "--", str(job_path), opt.output_dir, str(opt.num_views)
-        ]
-        return subprocess.Popen(args, env=env)
-
-    procs = []
-    for i in range(N):
-        sub = metadata.iloc[i*chunk : (i+1)*chunk]
-        if len(sub):
-            procs.append(launch(i, sub))
-
-    # wait for all
-    for p in procs:
-        p.wait()
-
-    # ----- NEW: write one JSON job list and call Blender once -----
-    # job_path = tempfile.mktemp(suffix=".json")
-    # metadata[["local_path", "sha256"]].to_json(job_path, orient="records")
-
-    # os.environ["CYCLES_CACHE_PATH"] = "/home/suvaditya/.cache/blender/cycles_kernels"
-
-    # big_args = [
-    #     BLENDER_PATH, "-b", 
-    #     "--log-level", "1", 
-    #     "--log-file", os.path.join(opt.output_dir, "blender.log"),
-    #     "-P", os.path.join(os.path.dirname(__file__),
-    #                     "blender_script", "batch_driver.py"),
-    #     "--", job_path,                       # ← arg 0 inside Blender
-    #     opt.output_dir,                       # ← arg 1
-    #     str(opt.num_views)                    # ← arg 2
-    # ]
-    # subprocess.check_call(big_args)
-    # with open(os.devnull, "wb") as devnull:
-    #     subprocess.run(big_args, stdout=devnull, stderr=devnull, check=True)
-
     # process objects
-    # func = partial(_render, output_dir=opt.output_dir, num_views=opt.num_views)
-    # rendered = dataset_utils.foreach_instance(metadata, opt.output_dir, func, max_workers=opt.max_workers, desc='Rendering objects')
-    # rendered = pd.concat([rendered, pd.DataFrame.from_records(records)])
-    # rendered.to_csv(os.path.join(opt.output_dir, f'rendered_{opt.rank}.csv'), index=False)
+    func = partial(_render, output_dir=opt.output_dir, num_views=opt.num_views)
+    rendered = dataset_utils.foreach_instance(metadata, opt.output_dir, func, max_workers=opt.max_workers, desc='Rendering objects')
+    rendered = pd.concat([rendered, pd.DataFrame.from_records(records)])
+    rendered.to_csv(os.path.join(opt.output_dir, f'rendered_{opt.rank}.csv'), index=False)

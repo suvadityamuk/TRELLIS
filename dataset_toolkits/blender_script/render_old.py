@@ -5,9 +5,7 @@ from mathutils import Vector, Matrix
 import numpy as np
 import json
 import glob
-import os
 
-os.environ["CYCLES_CACHE_PATH"] = "/home/suvaditya/.cache/blender/cycles_kernels"
 
 """=============== BLENDER ==============="""
 
@@ -35,152 +33,27 @@ EXT = {
     'TARGA': 'tga'
 }
 
-def init_render(engine: str = "CYCLES", resolution: int = 512, geo_mode: bool = False):
-    """Configure the active Blender scene for lightning-fast dataset rendering.
-
-    Args:
-        engine (str): "CYCLES" or "BLENDER_EEVEE".
-        resolution (int): Square image size in pixels.
-        geo_mode (bool): If True, low-sample preview for quick geometry checks.
-    """
-    scene = bpy.context.scene
-
-    # ------------------------------------------------------------------
-    # Common settings
-    # ------------------------------------------------------------------
-    scene.render.engine = engine
-    scene.render.resolution_x = resolution
-    scene.render.resolution_y = resolution
-    scene.render.resolution_percentage = 100
-
-    # Fast file output (PNG with zero compression, or switch to JPEG below)
-    scene.render.image_settings.file_format = "PNG"       # "JPEG" if no alpha
-    scene.render.image_settings.color_mode   = "RGBA"
-    scene.render.image_settings.compression  = 0          # 0 = fastest
-    scene.render.film_transparent           = True        # keeps alpha
-
-    # ------------------------------------------------------------------
-    # Cycles — photoreal, but trimmed
-    # ------------------------------------------------------------------
-    if engine == "CYCLES":
-        c = scene.cycles
-        c.device               = "GPU"
-        c.use_adaptive_sampling = True
-        c.noise_threshold       = 0.05       # stop early when noise low
-        c.samples               = 32 if not geo_mode else 4
-        c.min_samples           = 4
-        c.diffuse_bounces       = 1
-        c.glossy_bounces        = 1
-        c.transparent_max_bounces = 2
-        c.max_bounces           = 2
-        c.tile_x = c.tile_y = 1024
-        c.denoiser              = "OPTIX"    # HIP / ONEAPI / METAL as needed
-        scene.render.use_persistent_data = True  # reuse BVH & textures
-
-        # Enable every detected GPU device, preferring OptiX > CUDA > HIP…
-        prefs = bpy.context.preferences.addons["cycles"].preferences
-        prefs.get_devices()
-        for backend in ("OPTIX", "CUDA", "HIP", "ONEAPI", "METAL"):
-            try:
-                prefs.compute_device_type = backend
-                prefs.get_devices()
-                for d in prefs.devices:
-                    d.use = True
-                break
-            except Exception:
-                continue
-
-    # ------------------------------------------------------------------
-    # Eevee — blazing fast raster, tuned down
-    # ------------------------------------------------------------------
-    elif engine == "BLENDER_EEVEE":
-        e = scene.eevee
-        e.taa_render_samples    = 2 if not geo_mode else 1
-        e.taa_samples           = 1
-        e.use_bloom             = False
-        e.use_gtao              = False
-        e.use_ssr               = False
-        e.use_volumetric_shadows = False
-        e.use_volumetric_lights  = False
-        e.use_soft_shadows      = False
-        e.gi_diffuse_bounces    = 0
-        e.gi_cubemap_resolution = '64'
-        e.shadow_cube_size      = '512'
-        e.shadow_cascade_size   = '1024'
-
-        # Global “Simplify” to kill heavy modifiers and volume steps
-        scene.render.use_simplify                 = True
-        scene.render.simplify_subdivision_render  = 0
-        scene.render.simplify_child_particles     = 0.0
-        scene.render.simplify_volumes             = 0.0
-
-# def init_render(engine='CYCLES', resolution=512, geo_mode=False):
-#     if engine == "CYCLES":
-#         c = scene.cycles
-#         c.device = "GPU"
-#         c.use_adaptive_sampling = True
-#         c.noise_threshold = 0.05     # quit early
-#         c.samples = 32               # max samples
-#         c.min_samples = 4
-#         c.diffuse_bounces = c.glossy_bounces = 1
-#         c.transparent_max_bounces = 2
-#         c.max_bounces = 2
-#         c.denoiser = "OPTIX"         # HIP / ONEAPI / METAL as fits your GPU
-#         scene.render.use_persistent_data = True
-
-#         prefs = bpy.context.preferences.addons["cycles"].preferences
-#         prefs.get_devices()
-#         prefs.compute_device_type = "OPTIX"  # fallback to CUDA/HIP/etc. if needed
-#         for d in prefs.devices:
-#             d.use = True
-
-#         scene.render.image_settings.compression = 0
-    # bpy.context.scene.render.engine = engine
-    # bpy.context.scene.render.resolution_x = resolution
-    # bpy.context.scene.render.resolution_y = resolution
-    # bpy.context.scene.render.resolution_percentage = 100
-    # bpy.context.scene.render.image_settings.file_format = 'PNG'
-    # bpy.context.scene.render.image_settings.color_mode = 'RGBA'
-    # bpy.context.scene.render.film_transparent = True
+def init_render(engine='CYCLES', resolution=512, geo_mode=False):
+    bpy.context.scene.render.engine = engine
+    bpy.context.scene.render.resolution_x = resolution
+    bpy.context.scene.render.resolution_y = resolution
+    bpy.context.scene.render.resolution_percentage = 100
+    bpy.context.scene.render.image_settings.file_format = 'PNG'
+    bpy.context.scene.render.image_settings.color_mode = 'RGBA'
+    bpy.context.scene.render.film_transparent = True
     
-    # bpy.context.scene.cycles.device = 'GPU'
-    # bpy.context.scene.cycles.samples = 128 if not geo_mode else 1
-    # bpy.context.scene.cycles.filter_type = 'BOX'
-    # bpy.context.scene.cycles.filter_width = 1
-    # bpy.context.scene.cycles.diffuse_bounces = 1
-    # bpy.context.scene.cycles.glossy_bounces = 1
-    # bpy.context.scene.cycles.transparent_max_bounces = 3 if not geo_mode else 0
-    # bpy.context.scene.cycles.transmission_bounces = 3 if not geo_mode else 1
-    # bpy.context.scene.cycles.use_denoising = True
+    bpy.context.scene.cycles.device = 'GPU'
+    bpy.context.scene.cycles.samples = 128 if not geo_mode else 1
+    bpy.context.scene.cycles.filter_type = 'BOX'
+    bpy.context.scene.cycles.filter_width = 1
+    bpy.context.scene.cycles.diffuse_bounces = 1
+    bpy.context.scene.cycles.glossy_bounces = 1
+    bpy.context.scene.cycles.transparent_max_bounces = 3 if not geo_mode else 0
+    bpy.context.scene.cycles.transmission_bounces = 3 if not geo_mode else 1
+    bpy.context.scene.cycles.use_denoising = True
         
-    # bpy.context.preferences.addons['cycles'].preferences.get_devices()
-    # bpy.context.preferences.addons['cycles'].preferences.compute_device_type = 'CUDA'
-
-# def init_render(engine='CYCLES', resolution=512, geo_mode=False):
-#     bpy.context.scene.render.engine = engine
-#     bpy.context.scene.render.resolution_x = resolution
-#     bpy.context.scene.render.resolution_y = resolution
-#     bpy.context.scene.render.resolution_percentage = 100
-#     bpy.context.scene.render.image_settings.file_format = 'PNG'
-#     bpy.context.scene.render.image_settings.color_mode = 'RGBA'
-#     bpy.context.scene.render.film_transparent = True
-    
-#     if engine == 'CYCLES':
-#         bpy.context.scene.cycles.device = 'GPU'
-#         bpy.context.scene.cycles.samples = 128 if not geo_mode else 1
-#         bpy.context.scene.cycles.filter_type = 'BOX'
-#         bpy.context.scene.cycles.filter_width = 1
-#         bpy.context.scene.cycles.diffuse_bounces = 1
-#         bpy.context.scene.cycles.glossy_bounces = 1
-#         bpy.context.scene.cycles.transparent_max_bounces = 3 if not geo_mode else 0
-#         bpy.context.scene.cycles.transmission_bounces = 3 if not geo_mode else 1
-#         bpy.context.scene.cycles.use_denoising = False
-        
-#         bpy.context.preferences.addons['cycles'].preferences.get_devices()
-#         bpy.context.preferences.addons['cycles'].preferences.compute_device_type = 'CUDA'
-#     else:
-#         bpy.context.scene.eevee.taa_render_samples = 4
-#         bpy.context.scene.eevee.gi_diffuse_bounces = 0
+    bpy.context.preferences.addons['cycles'].preferences.get_devices()
+    bpy.context.preferences.addons['cycles'].preferences.compute_device_type = 'CUDA'
     
 def init_nodes(save_depth=False, save_normal=False, save_albedo=False, save_mist=False):
     if not any([save_depth, save_normal, save_albedo, save_mist]):
@@ -557,8 +430,7 @@ def main(arg):
         init_scene()
         load_object(arg.object)
         if arg.split_normal:
-            pass
-            # split_mesh_normal()
+            split_mesh_normal()
         # delete_custom_normals()
     print('[INFO] Scene initialized.')
     
@@ -632,8 +504,7 @@ def main(arg):
         print('[INFO] Meshes triangulated.')
         
         # export ply mesh
-        
-        bpy.ops.wm.ply_export(filepath=os.path.join(arg.output_folder, 'mesh.ply'))
+        bpy.ops.export_mesh.ply(filepath=os.path.join(arg.output_folder, 'mesh.ply'))
 
         
 if __name__ == '__main__':
