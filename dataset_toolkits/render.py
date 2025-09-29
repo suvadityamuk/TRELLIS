@@ -46,7 +46,8 @@ def _render(file_path, sha256, output_dir, num_views):
         '--object', os.path.expanduser(file_path),
         '--resolution', '512',
         '--output_folder', output_folder,
-        '--engine', 'CYCLES',
+        # '--engine', 'CYCLES',
+        '--engine', 'EEVEE',
         '--save_mesh',
     ]
     if file_path.endswith('.blend'):
