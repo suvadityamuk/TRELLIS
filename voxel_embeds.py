@@ -76,20 +76,21 @@ def _render(file_path, sha256, output_dir, num_views):
     views = [{'yaw': y, 'pitch': p, 'radius': r, 'fov': f} for y, p, r, f in zip(yaws, pitchs, radius, fov)]
     
     args = [
-        BLENDER_PATH, '-b', '-P', os.path.join(os.path.dirname(__file__), 'blender_script', 'render.py'),
+        BLENDER_PATH, '-b', '-P', os.path.join(os.path.dirname(__file__), 'dataset_toolkits', 'blender_script', 'render.py'),
         '--',
         '--views', json.dumps(views),
         '--object', os.path.expanduser(file_path), 
         '--resolution', '512',
         '--output_folder', output_dir,
         # '--engine', 'CYCLES',
-        '--engine', 'EEVEE',
+        '--engine', 'BLENDER_EEVEE',
         '--save_mesh',
     ]
     if file_path.endswith('.blend'):
         args.insert(1, file_path)
     
-    call(args, stdout=DEVNULL, stderr=DEVNULL)
+    # call(args, stdout=DEVNULL, stderr=DEVNULL)
+    call(args)
     
     if os.path.exists(os.path.join(output_dir, 'transforms.json')):
         return {'sha256': sha256, 'rendered': True}
@@ -98,28 +99,35 @@ def main():
     # Get path to GLB file
     path = os.path.join(os.getcwd(), "sofa.glb")
     print(f"Processing file: {path}")
+
     # Convert GLB to PLY
     ply_path = os.path.join(os.getcwd(), "sofa_converted.ply")
     convert_glb_to_ply(path, ply_path)
+
     # Install Blender if not available
     _install_blender()
+
     # Set up parameters
     sha256 = get_sha256_hash_string(ply_path)
     render_output_dir = os.path.join(os.getcwd(), "guideflow_render_output", 'renders', sha256)
     os.makedirs(render_output_dir, exist_ok=True)
     num_views = 150
+
     # Call _render function to get images of views
     _render(path, sha256, render_output_dir, num_views)
     print(f"Rendered images saved in {render_output_dir}")
     print(f"Copying PLY file to render directory.")
+    
     # Copy the converted PLY file to the render directory
     os.system(f"cp {ply_path} {os.path.join(render_output_dir, 'mesh.ply')}")
     print(f"PLY file copied to {os.path.join(render_output_dir, 'mesh.ply')}")
+    
     # Use voxelize to create voxel representation
     voxel_output_dir = os.path.join(os.getcwd(), "guideflow_voxel_output")
     os.makedirs(os.path.join(voxel_output_dir, 'voxels'), exist_ok=True)
+    
     # Save voxels and metadata
-    _voxelize(path, sha256, voxel_output_dir)
+    _voxelize(ply_path, sha256, voxel_output_dir)
     print(f"Rendered images and voxel data saved in {render_output_dir} and {voxel_output_dir} respectively.")
 
 if __name__ == "__main__":

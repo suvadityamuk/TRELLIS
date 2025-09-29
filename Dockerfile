@@ -1,4 +1,5 @@
-FROM mcr.microsoft.com/devcontainers/miniconda:1-3
+FROM --platform=linux/amd64 mcr.microsoft.com/devcontainers/miniconda:1-3
+RUN apt-get update && apt-get install ffmpeg libsm6 libxext6  -y
 
 # Copy environment.yml (if found) to a temp location so we update the environment. Also
 # copy "noop.txt" so the COPY instruction does not fail if no environment.yml exists.
